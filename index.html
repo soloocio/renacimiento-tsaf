@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Renacimiento TSAF | Plan Maestro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F3F4F6; color: #1F2937; -webkit-tap-highlight-color: transparent; }
+        
+        /* UI Elements */
+        .nav-item.active { color: #D97706; border-top: 2px solid #D97706; background-color: #FFF7ED; }
+        .nav-item { color: #9CA3AF; transition: all 0.2s; border-top: 2px solid transparent; }
+        
+        .card-shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        
+        /* Inputs sin zoom iOS */
+        input, select, textarea { font-size: 16px !important; }
+        
+        /* Semáforo Tags */
+        .tag-green { background-color: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
+        .tag-yellow { background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+        .tag-red { background-color: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+
+        /* Calendario Grid */
+        .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+        .day-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; border-radius: 4px; background: white; border: 1px solid #E5E7EB; }
+        .day-done { background-color: #D1FAE5; border-color: #34D399; color: #065F46; font-weight: bold; }
+        .day-postponed { background-color: #FEF3C7; border-color: #F59E0B; color: #92400E; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col pb-20">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50 px-4 py-3 shadow-sm flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="bg-gray-900 text-white w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm tracking-tighter shadow-md">RT</div>
+            <div>
+                <h1 class="text-sm font-extrabold text-gray-900 leading-none tracking-tight">RENACIMIENTO</h1>
+                <p class="text-[10px] text-amber-600 font-bold uppercase mt-0.5">Planificación TSAF 190cm</p>
+            </div>
+        </div>
+        <button onclick="APP.exportData()" class="text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-gray-200 transition flex items-center gap-1">
+            <i class="fas fa-download"></i> <span class="hidden sm:inline">Backup</span>
+        </button>
+    </header>
+
+    <!-- Main Container -->
+    <main id="main-content" class="flex-grow w-full max-w-2xl mx-auto p-4 space-y-6">
+        <!-- Content injected via JS -->
+    </main>
+
+    <!-- Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 flex justify-between items-stretch z-50 h-16 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.03)]">
+        <button onclick="APP.nav('plan')" class="nav-item flex flex-col items-center justify-center flex-1" id="nav-plan">
+            <i class="fas fa-book-open text-lg mb-1"></i>
+            <span class="text-[10px] font-bold uppercase tracking-wide">Plan Maestro</span>
+        </button>
+        <button onclick="APP.nav('log')" class="nav-item flex flex-col items-center justify-center flex-1" id="nav-log">
+            <div class="bg-amber-500 text-white rounded-full w-10 h-10 flex items-center justify-center -mt-6 shadow-lg border-4 border-white">
+                <i class="fas fa-dumbbell text-lg"></i>
+            </div>
+            <span class="text-[10px] font-bold uppercase tracking-wide mt-1">Bitácora</span>
+        </button>
+        <button onclick="APP.nav('calendar')" class="nav-item flex flex-col items-center justify-center flex-1" id="nav-calendar">
+            <i class="fas fa-calendar-check text-lg mb-1"></i>
+            <span class="text-[10px] font-bold uppercase tracking-wide">Calendario 16S</span>
+        </button>
+    </nav>
+
+    <!-- Workout Overlay -->
+    <div id="workout-overlay" class="fixed inset-0 bg-gray-50 z-[60] hidden overflow-y-auto pb-20 animate-[slideUp_0.3s_ease-out]">
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center shadow-sm z-10">
+            <button onclick="UI.closeWorkout()" class="text-gray-500 hover:text-gray-900 p-2">
+                <i class="fas fa-arrow-left text-lg"></i>
+            </button>
+            <div class="text-center">
+                <h2 id="overlay-title" class="text-sm font-bold text-gray-900 uppercase">Torso A</h2>
+                <p id="overlay-subtitle" class="text-[10px] text-amber-600 font-bold">Fase 1: Ajuste</p>
+            </div>
+            <button onclick="UI.finishWorkout()" class="bg-gray-900 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-black transition">
+                Guardar
+            </button>
+        </div>
+        <div id="workout-content" class="p-4 space-y-4 max-w-2xl mx-auto"></div>
+    </div>
+
+    <script>
+        // --- DATA LAYER ---
+        const DB = {
+            phases: {
+                1: { id: 1, name: "Ajuste Anatómico", weeks: "1-4", var: "v2", focus: "Estabilidad & Control", desc: "Recuperar propiocepción. Pesos moderados." },
+                2: { id: 2, name: "Acumulación Base", weeks: "5-10", var: "v1", focus: "Hipertrofia & Básicos", desc: "La base. Doble progresión. Semana 10 descarga." },
+                3: { id: 3, name: "Intensificación", weeks: "11-14", var: "v3", focus: "Potencia & Fuerza", desc: "Movimientos explosivos y cargas altas." },
+                4: { id: 4, name: "Densidad Express", weeks: "15-16+", var: "v4", focus: "Metabólico", desc: "Superseries. Ahorro de tiempo." }
+            },
+            // Contenido extraído de los documentos (Semáforo)
+            activities: {
+                green: [
+                    { name: "Pilates Suelo", freq: "1-2/sem", why: "Vital 190cm. Control pélvico." },
+                    { name: "Cardio LISS (Bici)", freq: "45-90min", why: "Zona 2. Sillín alto." },
+                    { name: "Natación Suave", freq: "1/sem", why: "Descompresión axial." }
+                ],
+                yellow: [
+                    { name: "Yoga Power", why: "Evitar antes de día de Torso." },
+                    { name: "Spinning (HIIT)", why: "Compite con recuperación de pierna." }
+                ],
+                red: [
+                    { name: "BodyPump / GAP", why: "Volumen basura. Interferencia." },
+                    { name: "CrossFit", why: "Alto riesgo de lesión con esta rutina." }
+                ]
+            },
+            // Rutinas completas (Actualizadas con tus documentos)
+            variations: {
+                "v1": { // PLANIFICACIÓN: EL ARQUITECTO
+                    "A1": [
+                        { name: "Press Banca Plano", sets: 3, reps: "5-8", note: "RPE 8. [SI] Gemelo Pie" },
+                        { name: "Remo Polea Baja", sets: 3, reps: "8-10", note: "RPE 9. [SI] Face Pull" },
+                        { name: "Press Militar Barra", sets: 3, reps: "6-8", note: "De pie. RPE 8.5" },
+                        { name: "Dominadas Neutras", sets: 3, reps: "RIR 1-2", note: "Fallo técnico" },
+                        { type: "ss", items: [{name: "Curl Barra Z", sets:3, reps:"10-12"}, {name: "Press Francés", sets:3, reps:"10-12"}], note: "Descanso 90s" },
+                        { name: "Rueda Abdominal", sets: 3, reps: "Fallo", note: "Retroversión" }
+                    ],
+                    "A2": [
+                        { name: "Sentadilla Hack", sets: 3, reps: "6-8", note: "Descanso total entre series" },
+                        { name: "Peso Muerto Rumano", sets: 3, reps: "8-10", note: "[SI] Elev. Laterales" },
+                        { name: "Sentadilla Búlgara", sets: 3, reps: "10-12", note: "Lento y controlado" },
+                        { name: "Press Pallof", sets: 3, reps: "15s", note: "Isométrico lado" },
+                        { name: "Curl Femoral Sentado", sets: 3, reps: "12-15", note: "[SI] Sóleo Sentado" }
+                    ],
+                    "B1": [
+                        { name: "Press Inclinado Manc", sets: 3, reps: "10-12", note: "[SI] Sóleo Sentado" },
+                        { name: "Jalón al Pecho", sets: 3, reps: "10-15", note: "[SI] Elev. Lat. Polea" },
+                        { name: "Fondos / Press Maq", sets: 3, reps: "12-15", note: "Densidad" },
+                        { name: "Remo Gironda", sets: 3, reps: "12-15", note: "Volumen" },
+                        { type: "ss", items: [{name: "Curl Martillo", sets:3, reps:"12-15"}, {name: "Ext. Tríceps Polea", sets:3, reps:"15-20"}], note: "Bombeo" },
+                        { name: "Woodchoppers", sets: 3, reps: "12-15", note: "Control" }
+                    ],
+                    "B2": [
+                        { name: "Prensa 45º", sets: 4, reps: "10-15", note: "[SI] Reverse Crunch" },
+                        { name: "Hip Thrust", sets: 4, reps: "10-12", note: "[SI] Elev. Laterales" },
+                        { name: "Ext. Cuádriceps", sets: 3, reps: "15-20", note: "Bombeo" },
+                        { name: "Curl Femoral Tumbado", sets: 3, reps: "12-15", note: "[SI] Gemelo Pie" }
+                    ]
+                },
+                "v2": { // VARIACIÓN 2: UNILATERAL
+                    "A1": [
+                        { name: "Press Banca Manc", sets: 3, reps: "8-10", note: "[SI] Gemelo Prensa" },
+                        { name: "Remo Máquina/Pecho", sets: 3, reps: "8-10", note: "[SI] Face Pull" },
+                        { name: "Militar Unilateral", sets: 3, reps: "8-10", note: "Por brazo" },
+                        { name: "Jalón Unilateral", sets: 3, reps: "10-12", note: "Inclina torso" },
+                        { type: "ss", items: [{name: "Curl Spider", sets:3, reps:"12"}, {name: "Patada Tríceps", sets:3, reps:"12"}], note: "Aislamiento" },
+                        { name: "Rueda Abdominal", sets: 3, reps: "Fallo", note: "Core" }
+                    ],
+                    "A2": [
+                        { name: "Hack Squat", sets: 3, reps: "8-10", note: "Profundidad" },
+                        { name: "Buenos Días Smith", sets: 3, reps: "10-12", note: "[SI] Elev. Laterales" },
+                        { name: "Zancadas", sets: 3, reps: "10 pasos", note: "Pasos largos" },
+                        { name: "Woodchoppers", sets: 3, reps: "12", note: "Tras zancadas" },
+                        { name: "Femoral Tumbado", sets: 3, reps: "12", note: "[SI] Sóleo Sentado" }
+                    ],
+                    "B1": [
+                        { name: "Press Hombro Sentado", sets: 3, reps: "8-10", note: "[SI] Gemelo Pie" },
+                        { name: "Dominadas Asist.", sets: 3, reps: "10-12", note: "[SI] Elev. Lat. Polea" },
+                        { name: "Press Inclinado Smith", sets: 3, reps: "8-12", note: "Estabilidad" },
+                        { name: "Remo Gironda", sets: 3, reps: "10-12", note: "Volumen" },
+                        { type: "ss", items: [{name: "Curl Predicador", sets:3, reps:"10"}, {name: "Fondos", sets:3, reps:"Fallo"}], note: "Brazos" },
+                        { name: "Pallof Press", sets: 3, reps: "20s", note: "Anti-rotación" }
+                    ],
+                    "B2": [
+                        { name: "Hip Thrust", sets: 4, reps: "8-10", note: "[SI] Reverse Crunch" },
+                        { name: "Prensa Unilateral", sets: 3, reps: "10-12", note: "[SI] Elev. Lat. Maq" },
+                        { name: "RDL Mancuernas", sets: 3, reps: "12", note: "Tempo 3-1-1" },
+                        { name: "Ext. Cuádriceps Uni", sets: 3, reps: "15", note: "Bombeo" },
+                        { type: "ss", items: [{name: "Curl Femoral Sentado", sets:2, reps:"20"}, {name: "Sóleo Prensa", sets:3, reps:"15"}], note: "Finisher" }
+                    ]
+                },
+                "v3": { // VARIACIÓN 3: POTENCIA
+                    "A1": [
+                        { name: "Fondos Lastrados", sets: 3, reps: "6-10", note: "[SI] Gemelo Burro" },
+                        { name: "Remo Pendlay", sets: 3, reps: "6-8", note: "Dead stop. [SI] Face Pull" },
+                        { name: "Press Landmine", sets: 3, reps: "10", note: "Unilateral" },
+                        { name: "Dominadas Pronas", sets: 3, reps: "RIR 1", note: "Lastre si puedes" },
+                        { type: "ss", items: [{name: "Curl Barra", sets:3, reps:"8"}, {name: "Francés Mancuerna", sets:3, reps:"10"}], note: "Pesado" },
+                        { name: "Woodchoppers", sets: 3, reps: "12", note: "Abajo a arriba" }
+                    ],
+                    "A2": [
+                        { name: "Sentadilla Frontal", sets: 3, reps: "6-8", note: "Verticalidad" },
+                        { name: "Hiperextensiones", sets: 3, reps: "12", note: "Glúteo. [SI] Elev Lat" },
+                        { name: "Step-Ups", sets: 3, reps: "8", note: "Bajada 3s" },
+                        { name: "Pallof Rodillas", sets: 3, reps: "20s", note: "Core" },
+                        { name: "Femoral Tumbado", sets: 3, reps: "10", note: "[SI] Sóleo" }
+                    ],
+                    "B1": [
+                        { name: "Dominadas Supinas", sets: 3, reps: "6-8", note: "Lastradas. [SI] Gemelo Uni" },
+                        { name: "Press Arnold", sets: 3, reps: "8-10", note: "[SI] Pájaros" },
+                        { name: "Press Incl. Barra", sets: 3, reps: "8-10", note: "45 grados" },
+                        { name: "Remo Uni Polea", sets: 3, reps: "10", note: "Con rotación" },
+                        { type: "ss", items: [{name: "Curl Martillo Cruzado", sets:3, reps:"12"}, {name: "Tríceps Cuerda", sets:3, reps:"12"}], note: "Brazos" },
+                        { name: "Reverse Crunch", sets: 3, reps: "15", note: "Banco inclinado" }
+                    ],
+                    "B2": [
+                        { name: "PM Sumo", sets: 3, reps: "5", note: "Técnica perfecta" },
+                        { name: "Prensa Inclinada", sets: 3, reps: "10-12", note: "[SI] Ab Wheel" },
+                        { name: "Sentadilla Búlgara", sets: 2, reps: "Fallo", note: "Burnout" },
+                        { name: "Gemelo Prensa", sets: 4, reps: "10", note: "[SI] Elev. Laterales" }
+                    ]
+                },
+                "v4": { // VARIACIÓN 4: DENSIDAD
+                    "A1": [
+                        { type: "ss", items: [{name: "Press Banca Manc", sets:3, reps:"8-10"}, {name: "Remo Barra", sets:3, reps:"8-10"}], note: "[SI] Gemelo" },
+                        { type: "ss", items: [{name: "Press Militar", sets:3, reps:"8"}, {name: "Dominadas", sets:3, reps:"RIR 1"}], note: "[SI] Face Pull" },
+                        { type: "ss", items: [{name: "Curl Barra", sets:3, reps:"10"}, {name: "Press Francés", sets:3, reps:"10"}, {name: "Ab Wheel", sets:3, reps:"10"}], note: "Tri-Serie" }
+                    ],
+                    "A2": [
+                        { type: "ss", items: [{name: "Ext. Cuádriceps", sets:3, reps:"15"}, {name: "Hack Squat", sets:3, reps:"8-10"}], note: "Pre-fatiga" },
+                        { type: "ss", items: [{name: "Femoral Tumbado", sets:3, reps:"12"}, {name: "RDL Manc", sets:3, reps:"10"}], note: "[SI] Elev. Lat" },
+                        { type: "ss", items: [{name: "Zancadas", sets:2, reps:"20"}, {name: "Sóleo", sets:3, reps:"15"}], note: "Finisher" }
+                    ],
+                    "B1": [
+                        { type: "ss", items: [{name: "Press Maquina", sets:3, reps:"10"}, {name: "Jalón V", sets:3, reps:"10"}], note: "[SI] Woodchoppers" },
+                        { type: "ss", items: [{name: "Press Hombro Maq", sets:3, reps:"10"}, {name: "Remo Cuello", sets:3, reps:"12"}], note: "[SI] Gemelo Prensa" },
+                        { type: "ss", items: [{name: "Curl Conc", sets:3, reps:"12"}, {name: "Tríceps Uni", sets:3, reps:"12"}, {name: "Rev Crunch", sets:3, reps:"15"}], note: "Tri-Set" }
+                    ],
+                    "B2": [
+                        { type: "ss", items: [{name: "Prensa", sets:3, reps:"12"}, {name: "Goblet Squat", sets:3, reps:"10"}], note: "Descanso 2 min" },
+                        { type: "ss", items: [{name: "Hip Thrust", sets:3, reps:"10"}, {name: "Femoral Sentado", sets:3, reps:"10"}], note: "[SI] Elev. Lat" },
+                        { type: "ss", items: [{name: "Gemelo Pie", sets:4, reps:"10"}, {name: "Plancha", sets:3, reps:"45s"}], note: "Core" }
+                    ]
+                }
+            }
+        };
+
+        // --- APP STATE ---
+        const APP = {
+            state: {
+                phase: 1,
+                calendar: {}, // key: "W1-D1" -> status: "done/postponed"
+                history: []
+            },
+            init: function() {
+                const saved = localStorage.getItem('renacimiento_v4_1');
+                if(saved) this.state = JSON.parse(saved);
+                this.nav('plan'); // Start on Plan page
+            },
+            save: function() {
+                localStorage.setItem('renacimiento_v4_1', JSON.stringify(this.state));
+            },
+            nav: function(page) {
+                // UI Tab Active State
+                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                document.getElementById('nav-' + page).classList.add('active');
+                
+                const container = document.getElementById('main-content');
+                if(page === 'plan') UI.renderPlan(container);
+                if(page === 'log') UI.renderLog(container);
+                if(page === 'calendar') UI.renderCalendar(container);
+            },
+            toggleDay: function(week, day) {
+                const key = `W${week}-D${day}`;
+                const current = this.state.calendar[key];
+                
+                if(!current) this.state.calendar[key] = 'done';
+                else if(current === 'done') this.state.calendar[key] = 'postponed';
+                else delete this.state.calendar[key];
+                
+                this.save();
+                this.nav('calendar'); // Re-render
+            },
+            exportData: function() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state));
+                const a = document.createElement('a');
+                a.href = dataStr;
+                a.download = "renacimiento_data.json";
+                a.click();
+            }
+        };
+
+        // --- UI RENDERER ---
+        const UI = {
+            renderPlan: function(container) {
+                container.innerHTML = `
+                    <!-- 1. Regla de Oro -->
+                    <div class="bg-white rounded-xl p-5 card-shadow border border-gray-100 mb-6">
+                        <h2 class="text-amber-600 font-bold text-xs uppercase tracking-wider mb-2">Regla de Oro</h2>
+                        <h3 class="font-bold text-gray-900 text-lg mb-2">El Microciclo Asíncrono</h3>
+                        <div class="bg-amber-50 p-3 rounded-lg border-l-4 border-amber-500 text-sm text-gray-700 italic">
+                            "Si fallas un día, NO TE LO SALTAN. LO MUEVES. Tu semana puede durar 8 o 9 días."
+                        </div>
+                    </div>
+
+                    <!-- 2. Semáforo Actividades -->
+                    <div class="bg-white rounded-xl p-5 card-shadow border border-gray-100 mb-6">
+                        <h2 class="text-gray-900 font-bold text-lg mb-4">Semáforo de Actividades</h2>
+                        
+                        <div class="space-y-4">
+                            <!-- Verde -->
+                            <div>
+                                <h4 class="flex items-center text-sm font-bold text-green-700 mb-2">
+                                    <span class="w-3 h-3 rounded-full bg-green-500 mr-2"></span> PERMITIDO (Luz Verde)
+                                </h4>
+                                <div class="grid gap-2">
+                                    ${DB.activities.green.map(a => `
+                                        <div class="tag-green p-2 rounded text-xs flex justify-between items-center">
+                                            <span class="font-bold">${a.name}</span>
+                                            <span class="opacity-75">${a.freq}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            
+                            <!-- Rojo -->
+                            <div>
+                                <h4 class="flex items-center text-sm font-bold text-red-700 mb-2">
+                                    <span class="w-3 h-3 rounded-full bg-red-500 mr-2"></span> EVITAR (Luz Roja)
+                                </h4>
+                                <div class="grid gap-2">
+                                    ${DB.activities.red.map(a => `
+                                        <div class="tag-red p-2 rounded text-xs">
+                                            <span class="font-bold block">${a.name}</span>
+                                            <span class="opacity-75">${a.why}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Resumen Fases -->
+                    <div class="bg-white rounded-xl p-5 card-shadow border border-gray-100">
+                        <h2 class="text-gray-900 font-bold text-lg mb-4">Estructura Macrociclo</h2>
+                        <div class="space-y-3">
+                            ${Object.values(DB.phases).map(p => `
+                                <div class="flex items-start p-3 rounded-lg ${APP.state.phase === p.id ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500'} transition-colors"
+                                     onclick="APP.state.phase = ${p.id}; APP.save(); APP.nav('plan');">
+                                    <div class="flex-1">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="font-bold text-sm">Fase ${p.id}: ${p.name}</span>
+                                            ${APP.state.phase === p.id ? '<span class="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded font-bold">ACTIVA</span>' : ''}
+                                        </div>
+                                        <p class="text-[10px] opacity-80 leading-relaxed">${p.desc}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderLog: function(container) {
+                const p = DB.phases[APP.state.phase];
+                container.innerHTML = `
+                    <div class="flex justify-between items-end mb-6">
+                        <div>
+                            <span class="text-[10px] font-bold text-amber-600 uppercase">Bitácora de Entrenamiento</span>
+                            <h2 class="text-2xl font-bold text-gray-900">${p.name}</h2>
+                            <p class="text-xs text-gray-400">Rutina: ${p.var.toUpperCase()} • ${p.focus}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        ${['A1', 'A2', 'B1', 'B2'].map(day => `
+                            <button onclick="UI.openWorkout('${p.var}', '${day}')" class="bg-white p-4 rounded-xl card-shadow border border-gray-100 text-left hover:border-amber-500 transition group">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-bold text-lg text-gray-800 group-hover:text-amber-600">${day.includes('1') ? 'Torso' : 'Pierna'} ${day.slice(0,1)}</span>
+                                    <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
+                                </div>
+                                <div class="text-[10px] text-gray-400 space-y-1">
+                                    ${DB.variations[p.var][day].slice(0,3).map(e => `<div>• ${(e.type==='ss' ? 'Superserie' : e.name).slice(0,18)}...</div>`).join('')}
+                                </div>
+                            </button>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="mt-6 text-center">
+                        <p class="text-[10px] text-gray-400">Selecciona una sesión para ver los ejercicios y registrar cargas.</p>
+                    </div>
+                `;
+            },
+
+            renderCalendar: function(container) {
+                // Generar 16 semanas
+                let html = `<div class="space-y-6">`;
+                
+                const phases = [
+                    {id:1, weeks:[1,2,3,4]},
+                    {id:2, weeks:[5,6,7,8,9,10]},
+                    {id:3, weeks:[11,12,13,14]},
+                    {id:4, weeks:[15,16]}
+                ];
+
+                phases.forEach(p => {
+                    const phaseInfo = DB.phases[p.id];
+                    html += `
+                        <div class="bg-white rounded-xl p-4 card-shadow border border-gray-100">
+                            <h3 class="font-bold text-gray-900 text-sm mb-3 sticky top-0 bg-white py-2 border-b border-gray-100">
+                                Fase ${p.id}: ${phaseInfo.name}
+                            </h3>
+                            <div class="space-y-4">
+                    `;
+                    
+                    p.weeks.forEach(w => {
+                        html += `
+                            <div>
+                                <span class="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Semana ${w}</span>
+                                <div class="week-grid">
+                                    ${[1,2,3,4,5,6,7].map(d => {
+                                        const key = `W${w}-D${d}`;
+                                        const status = APP.state.calendar[key];
+                                        let classStatus = "";
+                                        let icon = d;
+                                        if(status === 'done') { classStatus = "day-done"; icon = '<i class="fas fa-check"></i>'; }
+                                        if(status === 'postponed') { classStatus = "day-postponed"; icon = '<i class="fas fa-clock"></i>'; }
+                                        
+                                        return `<div onclick="APP.toggleDay(${w}, ${d})" class="day-cell ${classStatus}">${icon}</div>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div></div>`;
+                });
+                
+                html += `</div>
+                <div class="text-center text-[10px] text-gray-400 mt-4 pb-4">
+                    Toca un día para marcar: <br>
+                    1 toque = ✅ Realizado | 2 toques = ⏸️ Pospuesto | 3 toques = Borrar
+                </div>`;
+                
+                container.innerHTML = html;
+            },
+
+            openWorkout: function(varId, day) {
+                const exercises = DB.variations[varId][day];
+                const list = document.getElementById('workout-content');
+                
+                document.getElementById('overlay-title').innerText = `${day.includes('1') ? 'Torso' : 'Pierna'} ${day.slice(0,1)}`;
+                
+                list.innerHTML = exercises.map(ex => {
+                    if(ex.type === 'ss') {
+                        return `
+                            <div class="bg-amber-50 border-l-4 border-amber-500 rounded p-3 mb-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-[10px] font-bold bg-amber-500 text-white px-2 rounded">SUPERSERIE</span>
+                                    <span class="text-[10px] text-amber-800 font-bold">${ex.note}</span>
+                                </div>
+                                ${ex.items.map(sub => `
+                                    <div class="bg-white p-3 rounded mb-2 shadow-sm">
+                                        <div class="font-bold text-gray-900 text-sm">${sub.name}</div>
+                                        <div class="text-xs text-gray-500 mb-2">${sub.sets} x ${sub.reps}</div>
+                                        <div class="flex gap-2">
+                                            <input type="number" placeholder="Kg" class="w-20 bg-gray-50 border border-gray-200 rounded p-1 text-center font-bold">
+                                            <input type="number" placeholder="Reps" class="w-20 bg-gray-50 border border-gray-200 rounded p-1 text-center font-bold">
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    } else {
+                        return `
+                            <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4 shadow-sm">
+                                <h4 class="font-bold text-gray-900 text-sm mb-1">${ex.name}</h4>
+                                <div class="flex justify-between text-xs text-gray-500 mb-3">
+                                    <span>${ex.sets} x ${ex.reps}</span>
+                                    <span class="text-amber-600 font-medium">${ex.note}</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="number" placeholder="Kg" class="flex-1 bg-gray-50 border border-gray-200 rounded p-2 text-center font-bold text-gray-900">
+                                    <input type="number" placeholder="Reps" class="flex-1 bg-gray-50 border border-gray-200 rounded p-2 text-center font-bold text-gray-900">
+                                </div>
+                            </div>
+                        `;
+                    }
+                }).join('');
+                
+                document.getElementById('workout-overlay').classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            },
+
+            closeWorkout: function() {
+                document.getElementById('workout-overlay').classList.add('hidden');
+                document.body.style.overflow = '';
+            },
+
+            finishWorkout: function() {
+                alert("Entrenamiento guardado localmente (Simulación)");
+                this.closeWorkout();
+            }
+        };
+
+        APP.init();
+    </script>
+</body>
+</html>
